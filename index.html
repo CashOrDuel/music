@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Music</title>
+  <style>
+    :root{font-family:Inter, system-ui, Arial;}
+    body{display:flex;min-height:100vh;align-items:center;justify-content:center;background:#0f172a;color:#e6eef8;margin:0;padding:20px}
+    .player{width:100%;max-width:880px;background:linear-gradient(180deg,#071124,#0b1630);border-radius:12px;padding:20px;box-shadow:0 8px 30px rgba(2,6,23,.6)}
+    .header{display:flex;align-items:center;gap:16px}
+    .cover{width:120px;height:120px;border-radius:8px;background:#122136;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .cover img{width:100%;height:100%;object-fit:cover}
+    .meta{flex:1}
+    h1{font-size:18px;margin:0 0 6px 0}
+    p.sub{margin:0;color:#9fb2d3}
+    .controls{display:flex;align-items:center;gap:12px;margin-top:12px}
+    button{background:#0b2540;border:0;color:#dff1ff;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:18px;transition:background .2s}
+    button:hover{background:#133d65}
+    .btn-big{padding:12px 14px;font-weight:600;font-size:22px}
+    .albums{display:flex;gap:8px;margin-top:14px}
+    .album-btn{padding:8px 10px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,.05);cursor:pointer}
+    .album-btn.active{background:#123251;border:1px solid #1f6aa6}
+    .playlist{margin-top:18px;background:rgba(255,255,255,.02);padding:12px;border-radius:8px}
+    .track{display:flex;align-items:center;justify-content:space-between;padding:8px;border-radius:6px;cursor:pointer}
+    .track:hover{background:rgba(255,255,255,.03)}
+    .track.playing{background:linear-gradient(90deg, rgba(20,90,150,.14), rgba(20,120,190,.06))}
+    .seek{width:100%;margin-top:12px}
+    input[type=range]{width:100%}
+    .small{font-size:13px;color:#9fb2d3}
+    footer{margin-top:14px;text-align:right;color:#7ea3c7;font-size:13px}
+    @media (max-width:640px){.header{flex-direction:column;align-items:flex-start}.cover{width:100px;height:100px}}
+  </style>
+</head>
+<body>
+  <div class="player" role="application" aria-label="Music player">
+    <div class="header">
+      <div class="cover" id="cover">
+        <img src="assets/slow/cover.jpg" alt="cover" id="coverImg">
+      </div>
+      <div class="meta">
+        <h1 id="albumTitle">Album: Slow</h1>
+        <p class="sub" id="trackTitle">Pilih lagu untuk memulai</p>
+
+        <div class="controls">
+          <button id="prevBtn">⏮</button>
+          <button id="playBtn" class="btn-big">▶️</button>
+          <button id="nextBtn">⏭</button>
+          <div style="flex:1"></div>
+          <div class="small">Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></div>
+        </div>
+
+        <div class="albums">
+          <button class="album-btn active" data-album="slow">Slow</button>
+          <button class="album-btn" data-album="normal">Normal</button>
+          <button class="album-btn" data-album="strong">Strong</button>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="playlist" id="playlist">
+      <div class="small">Daftar lagu</div>
+    </div>
+
+    <div class="seek">
+      <input id="seek" type="range" min="0" max="100" value="0">
+      <div style="display:flex;justify-content:space-between;margin-top:6px" class="small"><span id="currentTime">0:00</span><span id="duration">0:00</span></div>
+    </div>
+
+    <footer>nikmati music bersama</footer>
+  </div>
+
+  <audio id="audio" preload="metadata"></audio>
+
+  <script>
+    const library = {
+      slow: {
+        title: 'Slow',
+        cover: 'assets/slow/cover.png',
+        tracks: [
+          {src:'assets/slow/.mp3', title:'Kosong'},
+          {src:'assets/slow/.mp3', title:'Kosong'}
+        ]
+      },
+      normal: {
+        title: 'Normal',
+        cover: 'assets/normal/cover.png',
+        tracks: [
+          {src:'assets/normal/.mp3', title:'Kosong'},
+          {src:'assets/normal/.mp3', title:'Kosong'}
+        ]
+      },
+      strong: {
+        title: 'Strong',
+        cover: 'assets/strong/cover.png',
+        tracks: [
+          {src:'assets/strong/Bmth-Lost.mp3', title:'Bmth-Lost'},
+          {src:'assets/strong/Love Like War.mp3', title:'Love Like War'},
+          {src:'assets/strong/Bring Me The Horizon - Drown.mp3', title:'Bring Me The Horizon - Drown'}
+        ]
+      }
+    };
+
+    let currentAlbum = 'slow';
+    let currentIndex = -1;
+
+    const audio = document.getElementById('audio');
+    const playBtn = document.getElementById('playBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const playlistEl = document.getElementById('playlist');
+    const albumTitleEl = document.getElementById('albumTitle');
+    const trackTitleEl = document.getElementById('trackTitle');
+    const coverImg = document.getElementById('coverImg');
+    const albumBtns = document.querySelectorAll('.album-btn');
+    const seek = document.getElementById('seek');
+    const currentTimeEl = document.getElementById('currentTime');
+    const durationEl = document.getElementById('duration');
+    const volume = document.getElementById('volume');
+
+    function renderPlaylist(albumKey){
+      playlistEl.innerHTML = '<div class="small">Daftar lagu</div>';
+      const ul = document.createElement('div');
+      library[albumKey].tracks.forEach((t, i) => {
+        const tr = document.createElement('div');
+        tr.className = 'track';
+        tr.dataset.index = i;
+        tr.innerHTML = `<div><strong>${i+1}.</strong> ${t.title}</div><div class="small">${formatFileName(t.src)}</div>`;
+        tr.addEventListener('click', () => playTrack(i));
+        ul.appendChild(tr);
+      });
+      playlistEl.appendChild(ul);
+    }
+
+    function formatFileName(path){
+      return path.split('/').pop();
+    }
+
+    function selectAlbum(albumKey){
+      currentAlbum = albumKey;
+      currentIndex = -1;
+      albumTitleEl.textContent = 'Album: ' + library[albumKey].title;
+      coverImg.src = library[albumKey].cover;
+      trackTitleEl.textContent = 'Pilih lagu untuk memulai';
+      renderPlaylist(albumKey);
+      albumBtns.forEach(b => b.classList.toggle('active', b.dataset.album === albumKey));
+    }
+
+    function playTrack(index){
+      const track = library[currentAlbum].tracks[index];
+      if(!track) return;
+      currentIndex = index;
+      audio.src = track.src;
+      audio.play();
+      highlightPlaying();
+      trackTitleEl.textContent = track.title;
+    }
+
+    function highlightPlaying(){
+      document.querySelectorAll('.track').forEach((el, i) => {
+        el.classList.toggle('playing', Number(el.dataset.index) === currentIndex);
+      });
+    }
+
+    playBtn.addEventListener('click', () => {
+      if(!audio.src){
+        playTrack(0);
+        return;
+      }
+      if(audio.paused){
+        audio.play();
+      } else {
+        audio.pause();
+      }
+    });
+
+    prevBtn.addEventListener('click', () => {
+      if(currentIndex > 0) playTrack(currentIndex-1);
+      else playTrack(library[currentAlbum].tracks.length-1);
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if(currentIndex < library[currentAlbum].tracks.length-1) playTrack(currentIndex+1);
+      else playTrack(0);
+    });
+
+    // === Tambahan logika ikon & auto-next ===
+    audio.addEventListener('play', () => {
+      playBtn.textContent = '⏸️'; // ubah ke ikon pause
+    });
+    audio.addEventListener('pause', () => {
+      playBtn.textContent = '▶️'; // ubah ke ikon play
+    });
+    audio.addEventListener('ended', () => {
+      // ketika lagu habis, lanjut ke lagu berikutnya
+      if(currentIndex < library[currentAlbum].tracks.length - 1){
+        playTrack(currentIndex + 1);
+      } else {
+        // kalau sudah di akhir album, mulai dari awal lagi
+        playTrack(0);
+      }
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      if(audio.duration){
+        const pct = (audio.currentTime / audio.duration) * 100;
+        seek.value = pct;
+        currentTimeEl.textContent = formatTime(audio.currentTime);
+      }
+    });
+
+    audio.addEventListener('loadedmetadata', () => {
+      durationEl.textContent = formatTime(audio.duration);
+    });
+
+    seek.addEventListener('input', () => {
+      if(!audio.duration) return;
+      const time = (seek.value / 100) * audio.duration;
+      audio.currentTime = time;
+    });
+
+    function formatTime(sec){
+      if(!isFinite(sec)) return '0:00';
+      const m = Math.floor(sec/60); 
+      const s = Math.floor(sec%60);
+      return `${m}:${s.toString().padStart(2,'0')}`;
+    }
+
+    volume.addEventListener('input', () => audio.volume = volume.value);
+    albumBtns.forEach(b => b.addEventListener('click', () => selectAlbum(b.dataset.album)));
+
+    selectAlbum('slow');
+  </script>
+</body>
+</html>
